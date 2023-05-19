@@ -1,11 +1,11 @@
 Param 
 (    
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()] 
-    [string[]]$AzureVMList,
+    [string]$AzureVMList,
     # DEV-WEEU-SAP01-HB2_hb2dhdb_z3_00l014a,DEV-WEEU-SAP01-HB2_hb2scs_z3_00l14a
 
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()] 
-    [string[]]$Action
+    [string]$Action
 )
 
 # Remove quotes from $Action variable
@@ -37,24 +37,24 @@ elseif ($AzureVMList)
     $AzureVMs = $AzureVMList
 } 
 
-[System.Collections.ArrayList]$AzureVMsToHandle = $AzureVMs 
+#[System.Collections.ArrayList]$AzureVMsToHandle = $AzureVMs 
 
 # Loop through the virtual machines and perform the requested action
-if($Action.Trim() -eq 'stop')
+if($Action -contains 'stop')
 {
-    foreach ($AzureVM in $AzureVMsToHandle) 
+    foreach ($VM in $AzureVMs) 
     {
-        Write-Output "Stopping virtual machine $AzureVM..."
-        Get-AzVM | ? {$_.Name -eq $AzureVM} | Stop-AzVM -Force 
+        Write-Output "Stopping virtual machine $VM ..."
+        Get-AzVM | ? {$_.Name -eq $VM} | Stop-AzVM -Force 
         
         Write-Output "Switching all disks to Standard HDD to benefit from additional savings during off-times ..."; 
-        $vmResource = Get-AzResource -Name $AzureVM
+        $vmResource = Get-AzResource -Name $VM
         $rgName = $vmResource.ResourceGroupName
         $vmDisks = Get-AzDisk -ResourceGroupName $rgName 
-        $vm = Get-AzVM -Name $AzureVM -resourceGroupName $rgName
+        $vmid = Get-AzVM -Name $VM -resourceGroupName $rgName
         foreach ($disk in $vmDisks)
         {
-            if ($disk.ManagedBy -eq $vm.Id)
+            if ($disk.ManagedBy -eq $vmid.Id)
             {
                 $diskupdateconfig = New-AzDiskUpdateConfig -SkuName Standard_LRS
                 Write-Output "Switching disk $disk.Name to Standard HDD"; 
@@ -63,26 +63,26 @@ if($Action.Trim() -eq 'stop')
         }
     }
 }
-elseif($Action.Trim() -eq 'start')
+elseif($Action -contains 'start')
 {
-    foreach ($AzureVM in $AzureVMsToHandle) 
+    foreach ($VM in $AzureVMs) 
     {
-        Write-Output "Switching all disks to Premium SSD before startup to benefit from better performance ..."; 
-        $vmResource = Get-AzResource -Name $AzureVM
+        Write-Output "Switching all disks of $VM to Premium SSD before startup to benefit from better performance ..."; 
+        $vmResource = Get-AzResource -Name $VM
         $rgName = $vmResource.ResourceGroupName
         $vmDisks = Get-AzDisk -ResourceGroupName $rgName 
-        $vm = Get-AzVM -Name $AzureVM -resourceGroupName $rgName
+        $vmid = Get-AzVM -Name $VM -resourceGroupName $rgName
         foreach ($disk in $vmDisks)
         {
-            if ($disk.ManagedBy -eq $vm.Id)
+            if ($disk.ManagedBy -eq $vmid.Id)
             { 
                 $diskupdateconfig = New-AzDiskUpdateConfig -SkuName Premium_LRS
                 Write-Output "Switching disk $disk.Name to Premium_LRS"; 
                 Update-AzDisk -ResourceGroupName $rgName -DiskName $disk.Name -DiskUpdate $diskupdateconfig 
             }
         }
-        Write-Output "Starting virtual machine $AzureVM..."
-        Get-AzVM | ? {$_.Name -eq $AzureVM} | Start-AzVM 
+        Write-Output "Starting virtual machine $VM ..."
+        Get-AzVM | ? {$_.Name -eq $VM} | Start-AzVM 
     }
 }
 else
